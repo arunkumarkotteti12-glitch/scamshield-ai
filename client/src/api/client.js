@@ -3,14 +3,12 @@ import { supabase } from '../lib/supabaseClient';
 
 const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
-// When hosted on Vercel, relative path '' uses Vercel Serverless Function directly for <1s latency
-const DEFAULT_API_URL = isLocalhost ? 'http://localhost:5000' : '';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL !== undefined ? import.meta.env.VITE_API_BASE_URL : DEFAULT_API_URL;
+// Localhost uses Express server port 5000; Vercel deployment uses native Vercel serverless functions ('')
+const API_BASE_URL = isLocalhost ? 'http://localhost:5000' : '';
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 60000, // 60s timeout to gracefully support cold starts
+  timeout: 45000,
   headers: {
     'Content-Type': 'application/json'
   }
