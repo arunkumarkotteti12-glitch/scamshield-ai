@@ -4,7 +4,8 @@ import { ScanLoadingAnimation } from '../components/ScanLoadingAnimation';
 import { ScanResultCard } from '../components/ScanResultCard';
 import { ErrorMessage } from '../components/ErrorMessage';
 import { scanApi } from '../api/client';
-import { ShieldCheck, History, ArrowRight } from 'lucide-react';
+import { analyzeAndSaveScanFallback } from '../lib/geminiClientService';
+import { ShieldCheck, History } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export const Dashboard = () => {
@@ -20,8 +21,18 @@ export const Dashboard = () => {
     setLoading(true);
 
     try {
-      const scanData = await scanApi.createScan(originalText, messageSource);
-      setResultScan(scanData);
+      // 1. Try server API scan first
+      try {
+        const scanData = await scanApi.createScan(originalText, messageSource);
+        setResultScan(scanData);
+        return;
+      } catch (backendErr) {
+        console.warn('Backend API endpoint returned error, executing direct AI client fallback:', backendErr);
+      }
+
+      // 2. Failproof Client-Side AI Scan Fallback
+      const fallbackScan = await analyzeAndSaveScanFallback(originalText, messageSource);
+      setResultScan(fallbackScan);
     } catch (err) {
       console.error('Scan error:', err);
       const apiMessage = err.response?.data?.message || err.message || 'Failed to complete AI scam analysis.';
