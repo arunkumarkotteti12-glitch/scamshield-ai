@@ -1,7 +1,11 @@
 import axios from 'axios';
 import { supabase } from '../lib/supabaseClient';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+const DEFAULT_API_URL = isLocalhost ? 'http://localhost:5000' : 'https://scamshield-ai-c5qp.onrender.com';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || DEFAULT_API_URL;
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
