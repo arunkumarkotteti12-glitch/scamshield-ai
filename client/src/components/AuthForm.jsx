@@ -37,24 +37,56 @@ export const AuthForm = ({ type = 'login' }) => {
 
     try {
       if (isSignup) {
-        // Call backend auto-confirm signup API (bypasses rate limits and email confirmation)
-        const response = await apiClient.post('/api/auth/signup', {
-          email,
-          password,
-          fullName
-        });
+        let signedUpSuccessfully = false;
 
-        if (response.data?.session) {
-          await supabase.auth.setSession(response.data.session);
-          navigate('/dashboard');
-        } else {
-          // If session wasn't returned directly, perform immediate sign-in
-          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        // 1. Try server auto-confirm API first
+        try {
+          const response = await apiClient.post('/api/auth/signup', {
+            email,
+            password,
+            fullName
+          });
+
+          if (response.data?.session) {
+            await supabase.auth.setSession(response.data.session);
+            navigate('/dashboard');
+            return;
+          }
+          signedUpSuccessfully = true;
+        } catch (backendErr) {
+          console.warn('Backend auto-confirm endpoint unavailable, using direct Supabase auth:', backendErr);
+        }
+
+        // 2. Direct Supabase Auth Signup Fallback
+        if (!signedUpSuccessfully) {
+          const { data: sbData, error: sbError } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+              data: { full_name: fullName }
+            }
+          });
+
+          if (sbError) throw sbError;
+
+          if (sbData.session) {
+            navigate('/dashboard');
+            return;
+          }
+
+          // Attempt immediate login
+          const { data: loginData } = await supabase.auth.signInWithPassword({
             email,
             password
           });
-          if (signInError) throw signInError;
-          if (signInData.session) navigate('/dashboard');
+
+          if (loginData?.session) {
+            navigate('/dashboard');
+            return;
+          }
+
+          setError('Account created! Please log in with your password.');
+          setTimeout(() => navigate('/login'), 1500);
         }
       } else {
         const { data, error: signInError } = await supabase.auth.signInWithPassword({
@@ -88,7 +120,7 @@ export const AuthForm = ({ type = 'login' }) => {
         </h1>
         <p className="text-sm text-slate-400 mt-1 font-sans">
           {isSignup
-            ? 'Instant auto-confirm registration — zero email confirmation required'
+            ? 'Instant zero-trust scam detector registration'
             : 'Log in to access your personal AI scam scanner & scan history'}
         </p>
       </div>
