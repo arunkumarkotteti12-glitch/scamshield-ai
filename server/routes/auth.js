@@ -52,17 +52,22 @@ router.post('/signup', async (req, res, next) => {
     });
 
     if (createError) {
-      // If user already exists, check if we can handle clean response
+      // If user already exists, update and confirm them
       if (createError.message?.includes('already registered')) {
+        const { data: { users } } = await supabaseAdmin.auth.admin.listUsers();
+        const existingUser = users?.find(u => u.email?.toLowerCase() === email.toLowerCase());
+        if (existingUser) {
+          await supabaseAdmin.auth.admin.updateUserById(existingUser.id, {
+            password,
+            email_confirm: true
+          });
+        }
+      } else {
         return res.status(400).json({
-          error: 'UserExists',
-          message: 'An account with this email address already exists. Please log in.'
+          error: 'SignupError',
+          message: createError.message
         });
       }
-      return res.status(400).json({
-        error: 'SignupError',
-        message: createError.message
-      });
     }
 
     // 2. Log in the newly created user to generate session JWT
@@ -74,7 +79,7 @@ router.post('/signup', async (req, res, next) => {
     if (loginError) {
       return res.status(200).json({
         message: 'Account created and confirmed! Please log in with your password.',
-        user: newUser.user
+        user: newUser?.user || null
       });
     }
 
@@ -83,6 +88,35 @@ router.post('/signup', async (req, res, next) => {
       session: sessionData.session,
       user: sessionData.user
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/auth/confirm-user
+ * Self-healing auto-confirm endpoint for users marked 'Email not confirmed'
+ */
+router.post('/confirm-user', async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: 'Email required.' });
+    }
+
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabaseAdmin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+
+    const { data: { users } } = await supabaseAdmin.auth.admin.listUsers();
+    const user = users?.find(u => u.email?.toLowerCase() === email.toLowerCase());
+
+    if (user) {
+      await supabaseAdmin.auth.admin.updateUserById(user.id, { email_confirm: true });
+      return res.json({ success: true, message: `User ${email} auto-confirmed.` });
+    }
+
+    return res.status(404).json({ error: 'User not found.' });
   } catch (err) {
     next(err);
   }

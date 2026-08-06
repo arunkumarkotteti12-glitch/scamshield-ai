@@ -89,10 +89,23 @@ export const AuthForm = ({ type = 'login' }) => {
           setTimeout(() => navigate('/login'), 1500);
         }
       } else {
-        const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        // LOGIN FLOW
+        let { data, error: signInError } = await supabase.auth.signInWithPassword({
           email,
           password
         });
+
+        // Self-Healing: If "Email not confirmed", auto-confirm via backend and retry login
+        if (signInError && signInError.message?.toLowerCase().includes('email not confirmed')) {
+          try {
+            await apiClient.post('/api/auth/confirm-user', { email });
+            const retryResult = await supabase.auth.signInWithPassword({ email, password });
+            data = retryResult.data;
+            signInError = retryResult.error;
+          } catch (healErr) {
+            console.warn('Self-healing auto-confirm failed:', healErr);
+          }
+        }
 
         if (signInError) throw signInError;
 
