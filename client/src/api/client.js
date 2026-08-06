@@ -3,12 +3,14 @@ import { supabase } from '../lib/supabaseClient';
 
 const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
-const DEFAULT_API_URL = isLocalhost ? 'http://localhost:5000' : 'https://scamshield-ai-c5qp.onrender.com';
+// When hosted on Vercel, relative path '' uses Vercel Serverless Function directly for <1s latency
+const DEFAULT_API_URL = isLocalhost ? 'http://localhost:5000' : '';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || DEFAULT_API_URL;
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL !== undefined ? import.meta.env.VITE_API_BASE_URL : DEFAULT_API_URL;
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
+  timeout: 60000, // 60s timeout to gracefully support cold starts
   headers: {
     'Content-Type': 'application/json'
   }
