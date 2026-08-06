@@ -7,16 +7,27 @@ import { errorHandler } from './middleware/errorHandler.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
+const CLIENT_URL = (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '');
 
-// CORS Configuration (Strict origin in production, allowed localhost for dev)
+const allowedOrigins = [
+  CLIENT_URL,
+  'http://localhost:5173',
+  'http://localhost:3000'
+];
+
+// CORS Configuration
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || origin === CLIENT_URL || process.env.NODE_ENV !== 'production') {
+      if (
+        !origin ||
+        allowedOrigins.includes(origin) ||
+        origin.endsWith('.vercel.app') ||
+        process.env.NODE_ENV !== 'production'
+      ) {
         callback(null, true);
       } else {
-        callback(new Error('Blocked by CORS policy'));
+        callback(new Error(`CORS policy blocked request from origin: ${origin}`));
       }
     },
     credentials: true,
@@ -32,6 +43,7 @@ app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
     app: 'ScamShield AI API',
+    clientUrl: CLIENT_URL,
     timestamp: new Date().toISOString()
   });
 });
@@ -54,6 +66,6 @@ app.use(errorHandler);
 app.listen(PORT, () => {
   console.log(`===========================================`);
   console.log(`🚀 ScamShield AI Server running on port ${PORT}`);
-  console.log(`🌐 Allowed Client URL: ${CLIENT_URL}`);
+  console.log(`🌐 Configured Client URL: ${CLIENT_URL}`);
   console.log(`===========================================`);
 });
