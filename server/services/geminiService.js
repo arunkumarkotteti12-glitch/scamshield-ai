@@ -23,7 +23,7 @@ const JSON_SCHEMA = {
   required: ['isScam', 'riskScore', 'riskLevel', 'scamType', 'redFlags', 'explanation', 'recommendedAction']
 };
 
-export const analyzeMessageWithGemini = async (originalText, messageSource = 'other') => {
+export const analyzeMessageWithGemini = async (originalText, messageSource = 'other', options = {}) => {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey || apiKey.includes('your_gemini_api_key')) {
     throw new Error('GEMINI_API_KEY is missing or invalid in server environment variables.');
@@ -31,14 +31,31 @@ export const analyzeMessageWithGemini = async (originalText, messageSource = 'ot
 
   const ai = new GoogleGenAI({ apiKey });
 
-  const userPrompt = `Message source: ${messageSource}. Analyze the following message and return your assessment as JSON matching this exact schema: { isScam: boolean, riskScore: number (0-100), riskLevel: 'low' | 'medium' | 'high', scamType: one of [phishing, lottery_prize_scam, fake_delivery, job_scam, romance_scam, impersonation_bank_or_government, tech_support_scam, investment_scam, other, not_a_scam], redFlags: array of short strings (max 6 items), explanation: a 2-3 sentence plain-English explanation, recommendedAction: a single short actionable sentence }. Message to analyze: "${originalText}"`;
+  const hasFile = Boolean(options.fileData);
+  let userPrompt = '';
+
+  if (hasFile) {
+    userPrompt = `Message source: ${messageSource}. An image or document file of a suspicious message has been attached. FIRST, carefully read and transcribe all message text and visual details from the attached file. THEN, run a complete scam risk analysis on the message content and any typed text ("${originalText || ''}"). Return your assessment as JSON matching this exact schema: { isScam: boolean, riskScore: number (0-100), riskLevel: 'low' | 'medium' | 'high', scamType: one of [phishing, lottery_prize_scam, fake_delivery, job_scam, romance_scam, impersonation_bank_or_government, tech_support_scam, investment_scam, other, not_a_scam], redFlags: array of short strings (max 6 items), explanation: a 2-3 sentence plain-English explanation, recommendedAction: a single short actionable sentence }.`;
+  } else {
+    userPrompt = `Message source: ${messageSource}. Analyze the following message and return your assessment as JSON matching this exact schema: { isScam: boolean, riskScore: number (0-100), riskLevel: 'low' | 'medium' | 'high', scamType: one of [phishing, lottery_prize_scam, fake_delivery, job_scam, romance_scam, impersonation_bank_or_government, tech_support_scam, investment_scam, other, not_a_scam], redFlags: array of short strings (max 6 items), explanation: a 2-3 sentence plain-English explanation, recommendedAction: a single short actionable sentence }. Message to analyze: "${originalText}"`;
+  }
+
+  const parts = [{ text: `${SYSTEM_PROMPT}\n\n${userPrompt}` }];
+
+  if (hasFile) {
+    const base64Clean = options.fileData.includes(',') ? options.fileData.split(',')[1] : options.fileData;
+    parts.push({
+      inlineData: {
+        mimeType: options.fileMimeType || 'image/png',
+        data: base64Clean
+      }
+    });
+  }
 
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: [
-        { role: 'user', parts: [{ text: `${SYSTEM_PROMPT}\n\n${userPrompt}` }] }
-      ],
+      contents: [{ role: 'user', parts }],
       config: {
         responseMimeType: 'application/json',
         responseSchema: JSON_SCHEMA,

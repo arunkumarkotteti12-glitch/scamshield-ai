@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Shield, ShieldAlert, History, LayoutDashboard, LogOut, Lock, Sparkles } from 'lucide-react';
+import { Shield, History, LayoutDashboard, LogOut } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 
 export const Navbar = ({ session }) => {
@@ -41,13 +41,13 @@ export const Navbar = ({ session }) => {
             </div>
           </Link>
 
-          {/* Navigation Links */}
+          {/* Navigation Links with Requirement 10 Underline Glow Indicator */}
           <div className="flex items-center gap-2 sm:gap-4">
             {session ? (
               <>
                 <Link
                   to="/dashboard"
-                  className={`flex items-center gap-2 text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg transition-all ${
+                  className={`relative group flex items-center gap-2 text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg transition-all ${
                     isActive('/dashboard')
                       ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30'
                       : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
@@ -55,11 +55,12 @@ export const Navbar = ({ session }) => {
                 >
                   <LayoutDashboard className="w-4 h-4" />
                   <span>Scanner</span>
+                  <span className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-gradient-to-r from-cyan-400 to-indigo-400 opacity-0 group-hover:opacity-100 transition-all duration-300 transform scale-x-0 group-hover:scale-x-100 origin-center shadow-[0_0_10px_rgba(6,182,212,0.9)]" />
                 </Link>
 
                 <Link
                   to="/history"
-                  className={`flex items-center gap-2 text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg transition-all ${
+                  className={`relative group flex items-center gap-2 text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg transition-all ${
                     isActive('/history') || location.pathname.startsWith('/history/')
                       ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30'
                       : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
@@ -67,6 +68,7 @@ export const Navbar = ({ session }) => {
                 >
                   <History className="w-4 h-4" />
                   <span>Scan History</span>
+                  <span className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-gradient-to-r from-cyan-400 to-indigo-400 opacity-0 group-hover:opacity-100 transition-all duration-300 transform scale-x-0 group-hover:scale-x-100 origin-center shadow-[0_0_10px_rgba(6,182,212,0.9)]" />
                 </Link>
 
                 {/* User Dropdown / Logout */}
@@ -88,9 +90,10 @@ export const Navbar = ({ session }) => {
               <div className="flex items-center gap-3">
                 <Link
                   to="/login"
-                  className="text-xs sm:text-sm font-semibold text-slate-300 hover:text-white px-3 py-2 transition"
+                  className="relative group text-xs sm:text-sm font-semibold text-slate-300 hover:text-white px-3 py-2 transition"
                 >
-                  Log In
+                  <span>Log In</span>
+                  <span className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full bg-gradient-to-r from-cyan-400 to-indigo-400 opacity-0 group-hover:opacity-100 transition-all duration-300 transform scale-x-0 group-hover:scale-x-100 origin-center shadow-[0_0_10px_rgba(6,182,212,0.9)]" />
                 </Link>
                 <Link
                   to="/signup"

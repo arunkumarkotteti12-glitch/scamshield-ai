@@ -26,30 +26,50 @@ router.post('/', scanRateLimiter, async (req, res, next) => {
       });
     }
 
-    const { originalText, messageSource } = validationResult.data;
+    const { originalText, messageSource, sourceType, fileData, fileMimeType } = validationResult.data;
+
+    const actualSourceType = sourceType || (fileData ? 'image' : 'text');
+    const textForAnalysis = originalText || (fileData ? '[Attached Image / PDF File]' : '');
 
     // 2. Perform AI Scam Analysis with Gemini
-    const aiAnalysis = await analyzeMessageWithGemini(originalText, messageSource);
+    const aiAnalysis = await analyzeMessageWithGemini(textForAnalysis, messageSource, {
+      fileData,
+      fileMimeType,
+      sourceType: actualSourceType
+    });
 
     // 3. Insert record using request-scoped Supabase client (RLS automatically enforces auth.uid() = user_id)
     const scanData = {
       user_id: req.user.id,
       message_source: messageSource,
-      original_text: originalText,
+      original_text: textForAnalysis,
       is_scam: aiAnalysis.isScam,
       risk_score: aiAnalysis.riskScore,
       risk_level: aiAnalysis.riskLevel,
       scam_type: aiAnalysis.scamType,
       red_flags: aiAnalysis.redFlags,
       explanation: aiAnalysis.explanation,
-      recommended_action: aiAnalysis.recommendedAction
+      recommended_action: aiAnalysis.recommendedAction,
+      source_type: actualSourceType
     };
 
-    const { data: newScan, error: dbError } = await req.supabase
+    let { data: newScan, error: dbError } = await req.supabase
       .from('scans')
       .insert([scanData])
       .select()
       .single();
+
+    // Fallback if source_type column does not exist on Supabase DB yet
+    if (dbError && dbError.message?.includes('source_type')) {
+      delete scanData.source_type;
+      const retryResult = await req.supabase
+        .from('scans')
+        .insert([scanData])
+        .select()
+        .single();
+      newScan = retryResult.data;
+      dbError = retryResult.error;
+    }
 
     if (dbError) {
       console.error('Supabase DB Insert Error:', dbError);

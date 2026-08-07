@@ -56,20 +56,38 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: 'Unauthorized', message: 'Invalid or expired session token.' });
     }
 
-    const { originalText, messageSource = 'other' } = req.body || {};
-    if (!originalText || originalText.length < 10) {
-      return res.status(400).json({ error: 'ValidationError', message: 'Message text must be at least 10 characters long.' });
+    const { originalText, messageSource = 'other', sourceType, fileData, fileMimeType } = req.body || {};
+    const actualSourceType = sourceType || (fileData ? 'image' : 'text');
+    const textForAnalysis = originalText || (fileData ? '[Attached Image / PDF File]' : '');
+
+    if (!fileData && (!originalText || originalText.length < 10)) {
+      return res.status(400).json({ error: 'ValidationError', message: 'Message text must be at least 10 characters long or an image file must be attached.' });
     }
 
     const apiKey = process.env.GEMINI_API_KEY || DEFAULT_GEMINI_KEY;
-
     const ai = new GoogleGenAI({ apiKey });
 
-    const userPrompt = `Message source: ${messageSource}. Analyze the following message and return your assessment as JSON matching this exact schema: { isScam: boolean, riskScore: number (0-100), riskLevel: 'low' | 'medium' | 'high', scamType: one of [phishing, lottery_prize_scam, fake_delivery, job_scam, romance_scam, impersonation_bank_or_government, tech_support_scam, investment_scam, other, not_a_scam], redFlags: array of short strings (max 6 items), explanation: a 2-3 sentence plain-English explanation, recommendedAction: a single short actionable sentence }. Message to analyze: "${originalText}"`;
+    let userPrompt = '';
+    if (fileData) {
+      userPrompt = `Message source: ${messageSource}. An image or document file of a message is attached. FIRST, read and extract all text and visual details from the attached file. THEN, run a complete scam risk analysis on the message content and typed text ("${originalText || ''}"). Return your assessment as JSON matching this exact schema: { isScam: boolean, riskScore: number (0-100), riskLevel: 'low' | 'medium' | 'high', scamType: one of [phishing, lottery_prize_scam, fake_delivery, job_scam, romance_scam, impersonation_bank_or_government, tech_support_scam, investment_scam, other, not_a_scam], redFlags: array of short strings (max 6 items), explanation: a 2-3 sentence plain-English explanation, recommendedAction: a single short actionable sentence }.`;
+    } else {
+      userPrompt = `Message source: ${messageSource}. Analyze the following message and return your assessment as JSON matching this exact schema: { isScam: boolean, riskScore: number (0-100), riskLevel: 'low' | 'medium' | 'high', scamType: one of [phishing, lottery_prize_scam, fake_delivery, job_scam, romance_scam, impersonation_bank_or_government, tech_support_scam, investment_scam, other, not_a_scam], redFlags: array of short strings (max 6 items), explanation: a 2-3 sentence plain-English explanation, recommendedAction: a single short actionable sentence }. Message to analyze: "${originalText}"`;
+    }
+
+    const parts = [{ text: `${SYSTEM_PROMPT}\n\n${userPrompt}` }];
+    if (fileData) {
+      const base64Clean = fileData.includes(',') ? fileData.split(',')[1] : fileData;
+      parts.push({
+        inlineData: {
+          mimeType: fileMimeType || 'image/png',
+          data: base64Clean
+        }
+      });
+    }
 
     const aiRes = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: [{ role: 'user', parts: [{ text: `${SYSTEM_PROMPT}\n\n${userPrompt}` }] }],
+      contents: [{ role: 'user', parts }],
       config: { responseMimeType: 'application/json', responseSchema: JSON_SCHEMA, temperature: 0.2 }
     });
 
@@ -78,21 +96,33 @@ export default async function handler(req, res) {
     const scanData = {
       user_id: user.id,
       message_source: messageSource,
-      original_text: originalText,
+      original_text: textForAnalysis,
       is_scam: Boolean(result.isScam),
       risk_score: Math.max(0, Math.min(100, Math.round(Number(result.riskScore) || 0))),
       risk_level: ['low', 'medium', 'high'].includes(result.riskLevel?.toLowerCase()) ? result.riskLevel.toLowerCase() : 'medium',
       scam_type: result.scamType || 'other',
       red_flags: Array.isArray(result.redFlags) ? result.redFlags.slice(0, 6) : [],
       explanation: result.explanation || 'Analysis completed.',
-      recommended_action: result.recommendedAction || 'Do not click links or share personal info.'
+      recommended_action: result.recommendedAction || 'Do not click links or share personal info.',
+      source_type: actualSourceType
     };
 
-    const { data: newScan, error: dbError } = await supabase
+    let { data: newScan, error: dbError } = await supabase
       .from('scans')
       .insert([scanData])
       .select()
       .single();
+
+    if (dbError && dbError.message?.includes('source_type')) {
+      delete scanData.source_type;
+      const retryRes = await supabase
+        .from('scans')
+        .insert([scanData])
+        .select()
+        .single();
+      newScan = retryRes.data;
+      dbError = retryRes.error;
+    }
 
     if (dbError) {
       console.error('Database Error:', dbError);

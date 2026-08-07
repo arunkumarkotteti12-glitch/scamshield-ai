@@ -13,30 +13,12 @@ export const ParticleBackground = () => {
     let width = (canvas.width = window.innerWidth);
     let height = (canvas.height = window.innerHeight);
 
-    const mouse = {
-      x: -1000,
-      y: -1000,
-      radius: 120
-    };
-
-    const handleMouseMove = (e) => {
-      mouse.x = e.clientX;
-      mouse.y = e.clientY;
-    };
-
-    const handleMouseLeave = () => {
-      mouse.x = -1000;
-      mouse.y = -1000;
-    };
-
     const handleResize = () => {
       width = canvas.width = window.innerWidth;
       height = canvas.height = window.innerHeight;
       initParticles();
     };
 
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseleave', handleMouseLeave);
     window.addEventListener('resize', handleResize);
 
     class Particle {
@@ -47,43 +29,21 @@ export const ParticleBackground = () => {
       reset() {
         this.x = Math.random() * width;
         this.y = Math.random() * height;
-        this.baseX = this.x;
-        this.baseY = this.y;
-        this.size = Math.random() * 2.5 + 0.8;
-        this.vx = (Math.random() - 0.5) * 0.4;
-        this.vy = (Math.random() - 0.5) * 0.4;
-        this.color = Math.random() > 0.4 ? 'rgba(56, 189, 248, ' : 'rgba(168, 85, 247, ';
-        this.alpha = Math.random() * 0.5 + 0.2;
-        this.density = Math.random() * 20 + 5;
+        this.size = Math.random() * 2 + 0.6;
+        this.vx = (Math.random() - 0.5) * 0.2; // Slow, subtle drift
+        this.vy = (Math.random() - 0.5) * 0.2;
+        this.color = Math.random() > 0.5 ? 'rgba(56, 189, 248, ' : 'rgba(20, 184, 166, '; // Teal & Cyan tones
+        this.alpha = Math.random() * 0.35 + 0.15;
       }
 
       update() {
-        // Natural ambient drift
         this.x += this.vx;
         this.y += this.vy;
 
-        // Wrap around screen boundaries
         if (this.x < 0) this.x = width;
         if (this.x > width) this.x = 0;
         if (this.y < 0) this.y = height;
         if (this.y > height) this.y = 0;
-
-        // Mouse repulsion logic
-        const dx = mouse.x - this.x;
-        const dy = mouse.y - this.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-
-        if (distance < mouse.radius) {
-          const forceDirectionX = dx / distance;
-          const forceDirectionY = dy / distance;
-          const maxDistance = mouse.radius;
-          const force = (maxDistance - distance) / maxDistance;
-          const directionX = forceDirectionX * force * this.density * 0.6;
-          const directionY = forceDirectionY * force * this.density * 0.6;
-
-          this.x -= directionX;
-          this.y -= directionY;
-        }
       }
 
       draw() {
@@ -98,7 +58,8 @@ export const ParticleBackground = () => {
     let particles = [];
     const initParticles = () => {
       particles = [];
-      const count = Math.min(Math.floor((width * height) / 12000), 100);
+      // Sparse particle count: ~30-40 subtle drifting dots total
+      const count = Math.min(Math.floor((width * height) / 35000), 40);
       for (let i = 0; i < count; i++) {
         particles.push(new Particle());
       }
@@ -107,46 +68,28 @@ export const ParticleBackground = () => {
     initParticles();
 
     const animate = () => {
-      // Clear with dark subtle gradient fill
       ctx.clearRect(0, 0, width, height);
 
-      // Render subtle radial background glow
-      const bgGlow = ctx.createRadialGradient(
-        width / 2,
-        height / 2,
-        100,
-        width / 2,
-        height / 2,
-        Math.max(width, height) / 1.2
-      );
-      bgGlow.addColorStop(0, '#090d16');
-      bgGlow.addColorStop(0.5, '#030712');
-      bgGlow.addColorStop(1, '#02040a');
-      ctx.fillStyle = bgGlow;
+      // Base background fill
+      ctx.fillStyle = '#020617';
       ctx.fillRect(0, 0, width, height);
 
-      // Update & Draw particles
+      // Soft low-center radial glow matching teal/blue palette
+      const glowX = width / 2;
+      const glowY = height * 0.45;
+      const glowRadius = Math.min(width, height) * 0.6;
+
+      const radialGlow = ctx.createRadialGradient(glowX, glowY, 0, glowX, glowY, glowRadius);
+      radialGlow.addColorStop(0, 'rgba(20, 184, 166, 0.12)'); // Soft teal glow center
+      radialGlow.addColorStop(0.4, 'rgba(14, 165, 233, 0.06)'); // Soft cyan blue mid
+      radialGlow.addColorStop(1, 'rgba(2, 6, 23, 0)');
+      ctx.fillStyle = radialGlow;
+      ctx.fillRect(0, 0, width, height);
+
+      // Update & Draw sparse drifting dots
       for (let i = 0; i < particles.length; i++) {
         particles[i].update();
         particles[i].draw();
-      }
-
-      // Draw faint connecting lines between nearby particles
-      for (let a = 0; a < particles.length; a++) {
-        for (let b = a + 1; b < particles.length; b++) {
-          const dx = particles[a].x - particles[b].x;
-          const dy = particles[a].y - particles[b].y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-
-          if (dist < 100) {
-            ctx.strokeStyle = `rgba(56, 189, 248, ${0.15 * (1 - dist / 100)})`;
-            ctx.lineWidth = 0.5;
-            ctx.beginPath();
-            ctx.moveTo(particles[a].x, particles[a].y);
-            ctx.lineTo(particles[b].x, particles[b].y);
-            ctx.stroke();
-          }
-        }
       }
 
       animationFrameId = requestAnimationFrame(animate);
@@ -155,8 +98,6 @@ export const ParticleBackground = () => {
     animate();
 
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseleave', handleMouseLeave);
       window.removeEventListener('resize', handleResize);
       cancelAnimationFrame(animationFrameId);
     };

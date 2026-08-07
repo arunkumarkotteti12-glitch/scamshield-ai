@@ -34,10 +34,13 @@ apiClient.interceptors.request.use(
  * Scan API Methods
  */
 export const scanApi = {
-  createScan: async (originalText, messageSource = 'other') => {
+  createScan: async (originalText, messageSource = 'other', options = {}) => {
     const response = await apiClient.post('/api/scans', {
       originalText,
-      messageSource
+      messageSource,
+      sourceType: options.sourceType || (options.fileData ? 'image' : 'text'),
+      fileData: options.fileData,
+      fileMimeType: options.fileMimeType
     });
     return response.data;
   },
